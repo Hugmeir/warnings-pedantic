@@ -39,6 +39,7 @@ my_rpeep(pTHX_ OP *o)
     OP *orig_o = o;
     OP *nextstate = NULL;
     for(; o; o = o->op_next) {
+        char *what = NULL;
         switch(o->op_type) {
             case OP_NULL:
                 if (   o->op_targ != OP_NEXTSTATE
@@ -71,6 +72,29 @@ my_rpeep(pTHX_ OP *o)
                     warn("Unusual use of close() in void context");
                 }
                 
+                break;
+            }
+            case OP_SAY:
+                if (!what)
+                    what = "say";
+            case OP_PRTF:
+                if (!what)
+                    what = "printf";
+            case OP_PRINT: {
+                U8 want = o->op_flags & OPf_WANT;
+                if (o->op_opt || want != OPf_WANT_VOID) {
+                    what = NULL;
+                    break;
+                }
+
+                if (!what)
+                    what = "print";
+                
+                if (warn_for(o, nextstate, warn_category)) {
+                    warn("Suspect use of %s() in void context", what);
+                }
+                
+                what = NULL;
                 break;
             }
         }
