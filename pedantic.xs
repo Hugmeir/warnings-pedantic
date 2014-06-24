@@ -9,7 +9,39 @@
 # include "XSUB.h"
 # undef PERL_CORE
 #endif
- 
+
+static bool
+THX_warn_for(pTHX_ OP* o, U32 category)
+#define warn_for(o,c) THX_warn_for(aTHX_ o,c)
+{
+    bool do_warn = FALSE;
+    
+    /* PL_curcop->cop_warnings might be NULL/empty, in which case
+     * we need to find the nearest OP_NEXTSTATE and check if the warning
+     * is on. ...I think.
+     */
+    if (!PL_curcop->cop_warnings) {
+        OP *next = NULL;
+        for ( next = o->op_next; next; next = next->op_next ) {
+            switch (next->op_type) {
+                case OP_NULL:
+                    if (   o->op_targ != OP_NEXTSTATE
+                        || o->op_targ != OP_DBSTATE )
+                        break;
+                case OP_DBSTATE:
+                case OP_NEXTSTATE:
+                    PL_curcop = (COP*)(next);
+                    break;
+            }
+        }
+    
+    }
+
+    return !(PL_dowarn & G_WARN_ALL_OFF)
+            && ( (PL_dowarn & G_WARN_ALL_ON)
+                    || ckWARN(WARN_ALL)
+                    || ckWARN(category) );
+}
  
 static unsigned long warn_category = 0;
 
@@ -28,28 +60,7 @@ my_rpeep(pTHX_ OP *o)
                 if ( want != OPf_WANT_VOID )
                     break;
                 
-                if (!PL_curcop->cop_warnings) {
-                    OP *next = NULL;
-                    for ( next = o->op_next; next; next = next->op_next ) {
-                        switch (next->op_type) {
-                            case OP_NULL:
-                                if ( o->op_targ != OP_NEXTSTATE || o->op_targ != OP_DBSTATE )
-                                    break;
-                            case OP_DBSTATE:
-                            case OP_NEXTSTATE:
-                                PL_curcop = (COP*)(next);
-                                break;
-                        }
-                    }
-                    
-                }
-                
-                bool do_warn = !(PL_dowarn & G_WARN_ALL_OFF)
-                                && ( (PL_dowarn & G_WARN_ALL_ON)
-                                    || ckWARN(WARN_ALL)
-                                    || ckWARN(warn_category) );
-
-                if (do_warn) {
+                if (warn_for(o, warn_category)) {
                     warn("Unusual use of grep in void context");
                 }
                 break;
