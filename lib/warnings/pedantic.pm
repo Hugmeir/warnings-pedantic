@@ -2,7 +2,7 @@ package warnings::pedantic;
 
 use 5.006;
 use strict;
-use warnings FATAL => 'all';
+#use warnings FATAL => 'all';
 
 =head1 NAME
 
@@ -14,7 +14,25 @@ Version 0.01
 
 =cut
 
+require Carp;
+
+
 our $VERSION = '0.01';
+require XSLoader;
+XSLoader::load(__PACKAGE__);
+
+warnings::register_categories('pedantic');
+start(shift, $warnings::Offsets{pedantic}/2);
+
+sub import {
+    warnings->import('pedantic');
+}
+
+sub unimport {
+    warnings->unimport('pedantic');
+}
+
+END { done(__PACKAGE__); }
 
 
 =head1 SYNOPSIS
@@ -27,27 +45,6 @@ Perhaps a little code snippet.
 
     my $foo = warnings::pedantic->new();
     ...
-
-=head1 EXPORT
-
-A list of functions that can be exported.  You can delete this section
-if you don't export anything, such as for a purely object-oriented module.
-
-=head1 SUBROUTINES/METHODS
-
-=head2 function1
-
-=cut
-
-sub function1 {
-}
-
-=head2 function2
-
-=cut
-
-sub function2 {
-}
 
 =head1 AUTHOR
 
