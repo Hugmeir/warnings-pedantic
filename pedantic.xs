@@ -11,8 +11,8 @@
 #endif
 
 static bool
-THX_warn_for(pTHX_ OP* o, U32 category)
-#define warn_for(o,c) THX_warn_for(aTHX_ o,c)
+THX_warn_for(pTHX_ OP* o, OP* nextstate, U32 category)
+#define warn_for(o,n,c) THX_warn_for(aTHX_ o,n,c)
 {
     bool do_warn = FALSE;
     
@@ -21,20 +21,7 @@ THX_warn_for(pTHX_ OP* o, U32 category)
      * is on. ...I think.
      */
     if (!PL_curcop->cop_warnings) {
-        OP *next = NULL;
-        for ( next = o->op_next; next; next = next->op_next ) {
-            switch (next->op_type) {
-                case OP_NULL:
-                    if (   o->op_targ != OP_NEXTSTATE
-                        || o->op_targ != OP_DBSTATE )
-                        break;
-                case OP_DBSTATE:
-                case OP_NEXTSTATE:
-                    PL_curcop = (COP*)(next);
-                    break;
-            }
-        }
-    
+        PL_curcop = (COP*)(nextstate);
     }
 
     return !(PL_dowarn & G_WARN_ALL_OFF)
@@ -50,8 +37,18 @@ STATIC void
 my_rpeep(pTHX_ OP *o)
 {
     OP *orig_o = o;
+    OP *nextstate = NULL;
     for(; o; o = o->op_next) {
         switch(o->op_type) {
+            case OP_NULL:
+                if (   o->op_targ != OP_NEXTSTATE
+                    || o->op_targ != OP_DBSTATE )
+                    break;
+            case OP_DBSTATE:
+            case OP_NEXTSTATE: {
+                nextstate = o;
+                break;
+            }
             case OP_GREPWHILE: {
                 U8 want = o->op_flags & OPf_WANT;
                 if ((o->op_private & (OPpLVAL_INTRO|OPpOUR_INTRO)) || o->op_opt)
@@ -60,9 +57,20 @@ my_rpeep(pTHX_ OP *o)
                 if ( want != OPf_WANT_VOID )
                     break;
                 
-                if (warn_for(o, warn_category)) {
+                if (warn_for(o, nextstate, warn_category)) {
                     warn("Unusual use of grep in void context");
                 }
+                break;
+            }
+            case OP_CLOSE: {
+                U8 want = o->op_flags & OPf_WANT;
+                if (o->op_opt || want != OPf_WANT_VOID)
+                    break;
+                
+                if (warn_for(o, nextstate, warn_category)) {
+                    warn("Unusual use of close() in void context");
+                }
+                
                 break;
             }
         }
