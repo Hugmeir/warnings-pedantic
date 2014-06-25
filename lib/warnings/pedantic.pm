@@ -18,15 +18,27 @@ our $VERSION = '0.01';
 require XSLoader;
 XSLoader::load(__PACKAGE__);
 
-warnings::register_categories('pedantic');
-start(shift, $warnings::Offsets{pedantic}/2);
+
+my @categories = 'pedantic';
+
+for my $name (qw(grep close print)) {
+    push @categories, "void_$name";
+}
+
+warnings::register_categories($_) for @categories;
+
+my @offsets = map {
+                    $warnings::Offsets{$_} / 2
+                } @categories;
+
+start(shift, $offsets[0]);
 
 sub import {
-    warnings->import('pedantic');
+    warnings->import(@categories);
 }
 
 sub unimport {
-    warnings->unimport('pedantic');
+    warnings->unimport(@categories);
 }
 
 END { done(__PACKAGE__); }
@@ -54,6 +66,12 @@ as well as
 or
 
     no warnings::pedantic;
+
+Additionally, you can turn off specific warnings with
+
+    no warnings 'void_grep';
+    no warnings 'void_close';
+    no warnings 'void_print'; # printf, print, and say
 
 =head1 AUTHOR
 

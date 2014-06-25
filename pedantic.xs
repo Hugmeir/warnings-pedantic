@@ -11,8 +11,8 @@
 #endif
 
 static bool
-THX_warn_for(pTHX_ OP* o, OP* nextstate, U32 category)
-#define warn_for(o,n,c) THX_warn_for(aTHX_ o,n,c)
+THX_warn_for(pTHX_ OP* o, OP* nextstate, U32 category, U32 category2)
+#define warn_for(o,n,c,c2) THX_warn_for(aTHX_ o,n,c,c2)
 {
     bool do_warn = FALSE;
     
@@ -26,11 +26,14 @@ THX_warn_for(pTHX_ OP* o, OP* nextstate, U32 category)
 
     return !(PL_dowarn & G_WARN_ALL_OFF)
             && ( (PL_dowarn & G_WARN_ALL_ON)
-                    || ckWARN(WARN_ALL)
-                    || ckWARN(category) );
+                    || PL_curcop->cop_warnings == pWARN_ALL
+                    || (ckWARN(category) && (category2 ? ckWARN(category2) : 1) ) );
 }
  
-static unsigned long warn_category = 0;
+static U32 pedantic      = 0;
+static U32 void_grep     = 0;
+static U32 void_close    = 0;
+static U32 void_print    = 0;
 
 static peep_t prev_rpeepp = NULL;
 STATIC void
@@ -58,7 +61,7 @@ my_rpeep(pTHX_ OP *o)
                 if ( want != OPf_WANT_VOID )
                     break;
                 
-                if (warn_for(o, nextstate, warn_category)) {
+                if (warn_for(o, nextstate, pedantic, void_grep)) {
                     warn("Unusual use of grep in void context");
                 }
                 break;
@@ -68,7 +71,7 @@ my_rpeep(pTHX_ OP *o)
                 if (o->op_opt || want != OPf_WANT_VOID)
                     break;
                 
-                if (warn_for(o, nextstate, warn_category)) {
+                if (warn_for(o, nextstate, pedantic, void_close)) {
                     warn("Unusual use of close() in void context");
                 }
                 
@@ -90,7 +93,7 @@ my_rpeep(pTHX_ OP *o)
                 if (!what)
                     what = "print";
                 
-                if (warn_for(o, nextstate, warn_category)) {
+                if (warn_for(o, nextstate, pedantic, void_print)) {
                     warn("Suspect use of %s() in void context", what);
                 }
                 
@@ -109,7 +112,10 @@ PROTOTYPES: DISABLE
 void
 start(SV *classname, U32 category)
 CODE:
-    warn_category = category;
+    pedantic   = category;
+    void_grep  = pedantic + 1;
+    void_close = pedantic + 2;
+    void_print = pedantic + 3;
     if (!prev_rpeepp) {
         prev_rpeepp = PL_rpeepp;
         PL_rpeepp = my_rpeep;

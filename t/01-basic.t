@@ -18,6 +18,21 @@ like(
 );
 $w = '';
 
+{
+    no warnings 'void_grep';
+    eval <<EOP;
+    grep 1, 1..10;
+    ();
+EOP
+
+    is(
+        $w,
+        '',
+        "can turn off an specific warning (void_grep)"
+    );
+    $w = '';
+}
+
 eval <<EOP;
 scalar(grep(1, 1..10), 3, 4, 5);
 EOP
