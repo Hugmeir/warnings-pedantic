@@ -148,6 +148,7 @@ my_rpeep(pTHX_ OP *o)
                 }
                 else {
                     SV *const buffer = sv_newmortal();
+                    gv = CvGV(cv) ? CvGV(cv) : gv;
                     gv_efullname3(buffer, gv, NULL);
                     warnif3(sort_prototype,
                         "Subroutine %"SVf"() used as first argument to sort, but has a %s prototype", buffer, proto);
