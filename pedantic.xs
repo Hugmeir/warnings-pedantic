@@ -93,6 +93,11 @@ my_rpeep(pTHX_ OP *o)
 
     for(; o; o = o->op_next) {
         char *what = NULL;
+        if ( o->op_opt ) {
+            PL_curcop = &PL_compiling;
+            prev_rpeepp(aTHX_ orig_o);
+            return;
+        }
         switch(o->op_type) {
         	case OP_ENTERLOOP:
 	        case OP_ENTERITER:
@@ -124,7 +129,9 @@ my_rpeep(pTHX_ OP *o)
                 break;
             }
             case OP_CLOSEDIR:
-                what = "closedir";
+                if (!what) {
+                    what = "closedir";
+                }
             case OP_CLOSE: {
                 U8 want = o->op_flags & OPf_WANT;
                 if (!what) {
