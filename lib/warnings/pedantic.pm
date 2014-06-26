@@ -4,6 +4,7 @@ use 5.006;
 use strict;
 use warnings FATAL => 'all';
 
+=encoding UTF-8
 =head1 NAME
 
 warnings::pedantic - Dubious warnings for dubious constructs.
@@ -78,7 +79,7 @@ END { done(__PACKAGE__); }
 
 =head1 SYNOPSIS
 
-This module provides a 'pedantic' warning category, which, when enabled,
+This module provides a C<pedantic> warning category, which, when enabled,
 warns of certain extra dubious constructs.
 
     use warnings::pedantic;
@@ -86,8 +87,58 @@ warns of certain extra dubious constructs.
     grep { ... } 1..10; # grep in void context
     close($fh);         # close() in void context
     print 1;            # print() in void context
-    
-Warnings can be turned off with
+
+=head1 DESCRIPTION    
+
+Besides the C<pedantic> category, which enables all of the following,
+the module also provides separate categories for individual groups
+of warnings:
+
+=over
+
+=item * void_grep
+
+Warns on void-context C<grep>:
+
+    grep /42/, @INC;
+    grep { /42/ } @INC;
+
+This code is not particularly wrong; it's merely using grep as
+an alternative to a foreach loop.
+
+=item * void_close
+
+Warns on void-context C<close()> and C<closedir()>:
+
+    close($fh);
+    closedir($dirh);
+
+This is considered dubious behaviour because errors on IO operations,
+such as ENOSPC, are not usually caught on the operation itself, but
+on the close() of the related filehandle.
+
+=item * void_print
+
+Warns on void-context print(), printf(), and say():
+
+    print();
+    say();
+    printf();
+
+=item * sort_prototype
+
+Warns when C<sort()>'s first argument is a subroutine with a prototype,
+and that prototype isn't C<$$>.
+
+    sub takes_a_block (&@) { ... }
+    takes_a_block { stuff_here } @args;
+    sort takes_a_block sub {...}, @args;
+
+This probably doesn't do what the author intended for it to do.
+
+=back
+
+All of the warnings can be turned off with
 
     no warnings 'pedantic';
 
@@ -95,7 +146,7 @@ as well as
 
     no warnings;
 
-or
+or even
 
     no warnings::pedantic;
 
@@ -104,6 +155,7 @@ Additionally, you can turn off specific warnings with
     no warnings 'void_grep';
     no warnings 'void_close';
     no warnings 'void_print'; # printf, print, and say
+    #etc
 
 =head1 AUTHOR
 
