@@ -17,7 +17,8 @@ THX_warn_for(pTHX_ U32 category, U32 category2)
     return !(PL_dowarn & G_WARN_ALL_OFF)
             && ( (PL_dowarn & G_WARN_ALL_ON)
                     || PL_curcop->cop_warnings == pWARN_ALL
-                    || (ckWARN(category) && (category2 ? ckWARN(category2) : 1) ) );
+                    || (ckWARN(category) && ckWARN(category2) )
+                    || ckWARN(category2) );
 }
  
 static U32 pedantic       = 0;
