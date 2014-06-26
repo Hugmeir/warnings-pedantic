@@ -35,12 +35,17 @@ my @offsets = map {
 
 start(shift, @offsets);
 
+my %categories = map { $_ => $_ } @categories;
 sub import {
-    warnings->import(@categories);
+    shift;
+    my @import = @_ ? @_ : @categories;
+    warnings->import(map { $categories{$_} } @import);
 }
 
 sub unimport {
-    warnings->unimport(@categories);
+    shift;
+    my @unimport = @_ ? @_ : @categories;
+    warnings->unimport(map { $categories{$_} } @unimport);
 }
 
 END { done(__PACKAGE__); }
