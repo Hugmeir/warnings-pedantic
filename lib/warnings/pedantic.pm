@@ -44,20 +44,27 @@ our $VERSION = '0.01';
 require XSLoader;
 XSLoader::load(__PACKAGE__);
 
-
-my @categories = 'pedantic';
-
+my @categories;
 for my $name (qw(grep close print)) {
     push @categories, "void_$name";
 }
 
 push @categories, "sort_prototype";
+push @categories, "ref_assignment";
 
 warnings::register_categories($_) for @categories;
 
 my @offsets = map {
                     $warnings::Offsets{$_} / 2
                 } @categories;
+
+my $pedantic = 0;
+
+$pedantic |= $_ for map { $warnings::Offsets{$_} } @categories;
+
+use Devel::Peek;
+Dump($pedantic);
+exit;
 
 start(shift, @offsets);
 

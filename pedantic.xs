@@ -78,10 +78,12 @@ static U32 void_grep      = 0;
 static U32 void_close     = 0;
 static U32 void_print     = 0;
 static U32 sort_prototype = 0;
+static U32 ref_assignment = 0;
 
-#define warnif3(x, m, a, b)    Perl_ck_warner(aTHX_ packWARN2(pedantic, x), m, a, b);
-#define warnif(x,m)    warnif3(x, m, NULL, NULL)
-#define warnif2(x,m, a)    warnif3(x, m, a, NULL)
+#define warnif4(x,m,a,b,c)  Perl_ck_warner(aTHX_ packWARN2(pedantic,x),m,a,b,c);
+#define warnif(x,m)         warnif4(x, m, NULL, NULL, NULL)
+#define warnif2(x,m,a)      warnif4(x, m, a, NULL, NULL)
+#define warnif3(x,m,a,b)    warnif4(x, m, a, b, NULL)
 
 static peep_t prev_rpeepp = NULL;
 STATIC void
@@ -226,6 +228,49 @@ my_rpeep(pTHX_ OP *o)
                 }
                 break;
             }
+            case OP_AASSIGN: {
+                OP *right = cBINOPo->op_first;
+                OP *left  = cBINOPo->op_last;
+                char *del = NULL;
+                
+                if ( right->op_flags & OPf_PARENS )
+                    break;
+                
+                if ( right->op_type == OP_NULL )
+                    right = cUNOPx(right)->op_first;
+                /* (), (1,...) */
+                if (!right->op_sibling || right->op_sibling->op_sibling)
+                    break;
+                
+                /* @a = (anything); is fine */
+                if ( (right->op_flags & OPf_PARENS) || !right->op_sibling )
+                    break;
+                right = right->op_sibling;
+
+                if ( right->op_flags & OPf_PARENS )
+                    break;
+                
+                OP * targets = cUNOPx(left)->op_first;
+                PERL_BITFIELD16 targ_one = targets->op_sibling->op_type;
+                
+                if ( targ_one == OP_RV2AV || targ_one == OP_PADAV ) {
+                    if (right->op_type == OP_ANONLIST ) {
+                        what = "an array";
+                        del = "[...]";
+                    }
+                }
+                if ( targ_one == OP_RV2HV || targ_one == OP_PADHV ) {
+                    if (right->op_type == OP_ANONHASH ) {
+                        what = "a hash";
+                        del = "{...}";
+                    }
+                }
+                if (what) {
+                    warnif4(ref_assignment, "Assigning %sref to %s; did you mean (...) instead of %s?", what, what, del);
+                }
+                                
+                break;
+            }
         }
     }
     PL_curcop = &PL_compiling;
@@ -237,13 +282,14 @@ MODULE = warnings::pedantic PACKAGE = warnings::pedantic
 PROTOTYPES: DISABLE
 
 void
-start(SV *classname, U32 ped, U32 vg, U32 vc, U32 vp, U32 sop)
+start(SV *classname, U32 ped, U32 vg, U32 vc, U32 vp, U32 sop, U32 rea)
 CODE:
     pedantic   = ped;
     void_grep  = vg;
     void_close = vc;
     void_print = vp;
     sort_prototype = sop;
+    ref_assignment = rea;
     if (!prev_rpeepp) {
         prev_rpeepp = WP_PEEP;
         WP_PEEP  = my_rpeep;
