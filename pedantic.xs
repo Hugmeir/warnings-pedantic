@@ -123,14 +123,19 @@ my_rpeep(pTHX_ OP *o)
                 }
                 break;
             }
+            case OP_CLOSEDIR:
+                what = "closedir";
             case OP_CLOSE: {
                 U8 want = o->op_flags & OPf_WANT;
+                if (!what) {
+                    what = "close";
+                }
                 if (o->op_opt || want != OPf_WANT_VOID)
                     break;
                 
                 if (warn_for(pedantic, void_close)) {
-                    warnif(void_close,
-                        "Unusual use of close() in void context");
+                    warnif2(void_close,
+                        "Unusual use of %s() in void context", what);
                 }
                 
                 break;
