@@ -10,6 +10,50 @@
 # undef PERL_CORE
 #endif
 
+#ifndef CvPROTO
+# define CvPROTO(cv) SvPVX((SV*)(cv))
+# define CvPROTOLEN(cv) SvCUR((SV*)(cv))
+#endif /* !CvPROTO */
+
+
+#ifndef PERL_ARGS_ASSERT_CK_WARNER
+static void Perl_ck_warner(pTHX_ U32 err, const char* pat, ...);
+ 
+#  ifdef vwarner
+static
+void
+Perl_ck_warner(pTHX_ U32 err, const char* pat, ...)
+{
+  va_list args;
+ 
+  PERL_UNUSED_ARG(err);
+  if (ckWARN(err)) {
+    va_list args;
+    va_start(args, pat);
+    vwarner(err, pat, &args);
+    va_end(args);
+  }
+}
+#  else
+/* yes this replicates my_warner */
+static
+void
+Perl_ck_warner(pTHX_ U32 err, const char* pat, ...)
+{
+  SV *sv;
+  va_list args;
+ 
+  PERL_UNUSED_ARG(err);
+ 
+  va_start(args, pat);
+  sv = vnewSVpvf(pat, &args);
+  va_end(args);
+  sv_2mortal(sv);
+  warn("%s", SvPV_nolen(sv));
+}
+#  endif
+#endif
+
 static bool
 THX_warn_for(pTHX_ U32 category, U32 category2)
 #define warn_for(c,c2) THX_warn_for(aTHX_ c,c2)
@@ -160,7 +204,16 @@ my_rpeep(pTHX_ OP *o)
     PL_curcop = &PL_compiling;
     prev_rpeepp(aTHX_ orig_o);
 }
- 
+
+#define WP_HAS_PERL(R, V, S) (PERL_REVISION > (R) || (PERL_REVISION == (R) && (PERL_VERSION > (V) || (PERL_VERSION == (V) && (PERL_SUBVERSION >= (S))))))
+
+#define WP_HAS_RPEEP WP_HAS_PERL(5, 13, 5)
+#if WP_HAS_RPEEP
+#  define WP_PEEP PL_rpeepp
+#else
+#  define WP_PEEP PL_peepp
+#endif
+
 MODULE = warnings::pedantic PACKAGE = warnings::pedantic
 
 PROTOTYPES: DISABLE
@@ -174,15 +227,15 @@ CODE:
     void_print = vp;
     sort_prototype = sop;
     if (!prev_rpeepp) {
-        prev_rpeepp = PL_rpeepp;
-        PL_rpeepp = my_rpeep;
+        prev_rpeepp = WP_PEEP;
+        WP_PEEP  = my_rpeep;
     }
 
 void
 done(SV *classname)
 CODE:
-    if ( PL_rpeepp == my_rpeep ) {
-        PL_rpeepp = prev_rpeepp;
+    if ( WP_PEEP == my_rpeep ) {
+        WP_PEEP = prev_rpeepp;
     }
     else {
         croak("WOAH THERE!! Something has gone HORRIBLY wrong!");
