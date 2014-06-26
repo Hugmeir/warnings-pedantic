@@ -63,5 +63,25 @@ like(
     qr/\QUnusual use of close() in void context/,
     "close() in void context"
 );
+$w = '';
+
+eval <<'EOP';
+package foobar;
+sub foo {1};
+sub bar ($$) {1};
+sub doof (&$) {1};
+() = sort foo  1..10;
+() = sort bar  1..10;
+() = sort doof 1..10;
+EOP
+
+() = print "<$w>";
+
+like(
+    $w,
+    qr/\A\QSubroutine foobar::doof() used as first argument to sort, but has a &\E\$ prototype/,
+    'sort foo, with foo(&$)'
+);
+$w = '';
 
 done_testing;

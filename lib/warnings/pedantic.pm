@@ -25,6 +25,8 @@ for my $name (qw(grep close print)) {
     push @categories, "void_$name";
 }
 
+push @categories, "sort_prototype";
+
 warnings::register_categories($_) for @categories;
 
 my @offsets = map {
