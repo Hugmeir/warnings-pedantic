@@ -33,7 +33,7 @@ my @offsets = map {
                     $warnings::Offsets{$_} / 2
                 } @categories;
 
-start(shift, $offsets[0]);
+start(shift, @offsets);
 
 sub import {
     warnings->import(@categories);

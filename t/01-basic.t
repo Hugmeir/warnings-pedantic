@@ -2,9 +2,19 @@ use Test::More;
 use warnings::pedantic;
 
 my $w = '';
-local $SIG{__WARN__} = sub {
-    $w .= shift;
-};
+BEGIN {
+    $SIG{__WARN__} = sub {
+        $w .= shift;
+    };
+}
+
+BEGIN {
+    
+    open my $fh, ">", *STDIN;
+    close($fh);
+    like($w, qr/\QUnusual use of close() in void context/, "works in a BEGIN block");
+    $w = '';
+}
 
 eval <<EOP;
 grep 1, 1..10;
@@ -74,8 +84,6 @@ sub doof (&$) {1};
 () = sort bar  1..10;
 () = sort doof 1..10;
 EOP
-
-() = print "<$w>";
 
 like(
     $w,
