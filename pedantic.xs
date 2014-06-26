@@ -15,6 +15,14 @@
 # define CvPROTOLEN(cv) SvCUR((SV*)(cv))
 #endif /* !CvPROTO */
 
+#define WP_HAS_PERL(R, V, S) (PERL_REVISION > (R) || (PERL_REVISION == (R) && (PERL_VERSION > (V) || (PERL_VERSION == (V) && (PERL_SUBVERSION >= (S))))))
+
+#define WP_HAS_RPEEP WP_HAS_PERL(5, 13, 5)
+#if WP_HAS_RPEEP
+#  define WP_PEEP PL_rpeepp
+#else
+#  define WP_PEEP PL_peepp
+#endif
 
 #ifndef PERL_ARGS_ASSERT_CK_WARNER
 static void Perl_ck_warner(pTHX_ U32 err, const char* pat, ...);
@@ -78,12 +86,19 @@ static U32 sort_prototype = 0;
 static peep_t prev_rpeepp = NULL;
 STATIC void
 my_rpeep(pTHX_ OP *o)
+#define my_rpeep(o) my_rpeep(aTHX_ o)
 {
     OP *orig_o = o;
     OP *nextstate = NULL;
+
     for(; o; o = o->op_next) {
         char *what = NULL;
         switch(o->op_type) {
+        	case OP_ENTERLOOP:
+	        case OP_ENTERITER:
+	            /* XXX TODO */
+	            o = cLOOPo->op_lastop;
+	            break;
             case OP_NULL:
                 if (   o->op_targ != OP_NEXTSTATE
                     || o->op_targ != OP_DBSTATE )
@@ -204,15 +219,6 @@ my_rpeep(pTHX_ OP *o)
     PL_curcop = &PL_compiling;
     prev_rpeepp(aTHX_ orig_o);
 }
-
-#define WP_HAS_PERL(R, V, S) (PERL_REVISION > (R) || (PERL_REVISION == (R) && (PERL_VERSION > (V) || (PERL_VERSION == (V) && (PERL_SUBVERSION >= (S))))))
-
-#define WP_HAS_RPEEP WP_HAS_PERL(5, 13, 5)
-#if WP_HAS_RPEEP
-#  define WP_PEEP PL_rpeepp
-#else
-#  define WP_PEEP PL_peepp
-#endif
 
 MODULE = warnings::pedantic PACKAGE = warnings::pedantic
 

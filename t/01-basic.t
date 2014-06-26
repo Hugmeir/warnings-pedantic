@@ -1,4 +1,7 @@
 use Test::More;
+use File::Temp qw/tempfile/;
+
+# After the File::Temp because File::Path has print() in void context
 use warnings::pedantic;
 
 my $w = '';
@@ -9,8 +12,7 @@ BEGIN {
 }
 
 BEGIN {
-    
-    open my $fh, ">", *STDIN;
+    my $fh = tempfile();
     close($fh);
     like($w, qr/\QUnusual use of close() in void context/, "works in a BEGIN block");
     $w = '';
@@ -55,7 +57,7 @@ like(
 $w = '';
 
 eval <<'EOP';
-open my $fh, "<", *STDIN;
+my $fh = tempfile();
 print $fh 1;
 printf $fh 1;
 close $fh;
