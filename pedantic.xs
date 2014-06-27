@@ -63,24 +63,22 @@ Perl_ck_warner(pTHX_ U32 err, const char* pat, ...)
 #endif
 
 static bool
-THX_warn_for(pTHX_ U32 category, U32 category2)
-#define warn_for(c,c2) THX_warn_for(aTHX_ c,c2)
+THX_warn_for(pTHX_ U32 category)
+#define warn_for(c) THX_warn_for(aTHX_ c)
 {
     return !(PL_dowarn & G_WARN_ALL_OFF)
             && ( (PL_dowarn & G_WARN_ALL_ON)
                     || PL_curcop->cop_warnings == pWARN_ALL
-                    || (ckWARN(category) && ckWARN(category2) )
-                    || ckWARN(category2) );
+                    || ckWARN(category) );
 }
  
-static U32 pedantic       = 0;
 static U32 void_grep      = 0;
 static U32 void_close     = 0;
 static U32 void_print     = 0;
 static U32 sort_prototype = 0;
 static U32 ref_assignment = 0;
 
-#define warnif4(x,m,a,b,c)  Perl_ck_warner(aTHX_ packWARN2(pedantic,x),m,a,b,c);
+#define warnif4(x,m,a,b,c)  Perl_ck_warner(aTHX_ packWARN(x),m,a,b,c);
 #define warnif(x,m)         warnif4(x, m, NULL, NULL, NULL)
 #define warnif2(x,m,a)      warnif4(x, m, a, NULL, NULL)
 #define warnif3(x,m,a,b)    warnif4(x, m, a, b, NULL)
@@ -124,10 +122,8 @@ my_rpeep(pTHX_ OP *o)
                 if ( want != OPf_WANT_VOID )
                     break;
                 
-                if (warn_for(pedantic, void_grep)) {
-                    warnif(void_grep,
-                        "Unusual use of grep in void context");
-                }
+                warnif(void_grep,
+                    "Unusual use of grep in void context");
                 break;
             }
             case OP_CLOSEDIR:
@@ -142,10 +138,8 @@ my_rpeep(pTHX_ OP *o)
                 if (o->op_opt || want != OPf_WANT_VOID)
                     break;
                 
-                if (warn_for(pedantic, void_close)) {
-                    warnif2(void_close,
-                        "Unusual use of %s() in void context", what);
-                }
+                warnif2(void_close,
+                    "Unusual use of %s() in void context", what);
                 
                 break;
             }
@@ -165,10 +159,8 @@ my_rpeep(pTHX_ OP *o)
                 if (!what)
                     what = "print";
                 
-                if (warn_for(pedantic, void_print)) {
-                    warnif2(void_print,
-                        "Suspect use of %s() in void context", what);
-                }
+                warnif2(void_print,
+                    "Suspect use of %s() in void context", what);
                 
                 what = NULL;
                 break;
@@ -183,7 +175,7 @@ my_rpeep(pTHX_ OP *o)
                 OP * constop = NULL;
                 OP * first = cUNOPx(o)->op_first->op_sibling;
                 
-                if (!warn_for(pedantic, sort_prototype))
+                if (!warn_for(sort_prototype))
                     break;
                 
                 if ( first->op_type == OP_NULL ) {
@@ -255,18 +247,8 @@ my_rpeep(pTHX_ OP *o)
                 
                 if ( targ_one == OP_RV2AV || targ_one == OP_PADAV ) {
                     if (right->op_type == OP_ANONLIST ) {
-                        what = "an array";
-                        del = "[...]";
+                        warnif(ref_assignment, "Assigning an arrayref to an array; did you mean (...) instead of [...]?");
                     }
-                }
-                if ( targ_one == OP_RV2HV || targ_one == OP_PADHV ) {
-                    if (right->op_type == OP_ANONHASH ) {
-                        what = "a hash";
-                        del = "{...}";
-                    }
-                }
-                if (what) {
-                    warnif4(ref_assignment, "Assigning %sref to %s; did you mean (...) instead of %s?", what, what, del);
                 }
                                 
                 break;
@@ -282,9 +264,8 @@ MODULE = warnings::pedantic PACKAGE = warnings::pedantic
 PROTOTYPES: DISABLE
 
 void
-start(SV *classname, U32 ped, U32 vg, U32 vc, U32 vp, U32 sop, U32 rea)
+start(SV *classname, U32 vg, U32 vc, U32 vp, U32 sop, U32 rea)
 CODE:
-    pedantic   = ped;
     void_grep  = vg;
     void_close = vc;
     void_print = vp;

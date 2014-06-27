@@ -94,4 +94,19 @@ like(
 );
 $w = '';
 
+eval <<'EOP';
+my @a  = [];
+my @a2 = ([]);
+EOP
+
+$w =~ s/ at \(eval.+//;
+chomp($w);
+
+like(
+    $w,
+    qr/\A\QAssigning an arrayref to an array; did you mean (...) instead of [...]?\E\z/,
+    'ref_assignment warning works'
+);
+$w = '';
+
 done_testing;

@@ -15,28 +15,32 @@ Version 0.01
 
 =cut
 
-if (!defined &warnings::register_categories) {
-    *mkMask = sub {
-        my ($bit) = @_;
-        my $mask = "";
+sub mkMask {
+    my ($bit) = @_;
+    my $mask = "";
 
-        vec($mask, $bit, 1) = 1;
-        return $mask;
-    };
+    vec($mask, $bit, 1) = 1;
+    return $mask;
+};
 
-    *warnings::register_categories = sub {
-        for my $package ( @_ ) {
-        if (! defined $warnings::Bits{$package}) {
-            $warnings::Bits{$package}     = mkMask($warnings::LAST_BIT);
-            vec($warnings::Bits{'all'}, $warnings::LAST_BIT, 1) = 1;
-            $warnings::Offsets{$package}  = $warnings::LAST_BIT ++;
-        foreach my $k (keys %warnings::Bits) {
-            vec($warnings::Bits{$k}, $warnings::LAST_BIT, 1) = 0;
-        }
-            $warnings::DeadBits{$package} = mkMask($warnings::LAST_BIT);
-            vec($warnings::DeadBits{'all'}, $warnings::LAST_BIT++, 1) = 1;
-        }
-        }
+sub register_categories {
+    for my $package ( @_ ) {
+    my ($submask, $deadmask);
+    if (ref $package) {
+        ($package, $submask, $deadmask) = @$package;
+    }
+    if (! defined $warnings::Bits{$package}) {
+        $warnings::Bits{$package}     = mkMask($warnings::LAST_BIT);
+        $warnings::Bits{$package} |= $submask if $submask;
+        vec($warnings::Bits{'all'}, $warnings::LAST_BIT, 1) = 1;
+        $warnings::Offsets{$package}  = $warnings::LAST_BIT ++;
+    foreach my $k (keys %warnings::Bits) {
+        vec($warnings::Bits{$k}, $warnings::LAST_BIT, 1) = 0;
+    }
+        $warnings::DeadBits{$package} = mkMask($warnings::LAST_BIT);
+        $warnings::DeadBits{$package} |= $deadmask if $deadmask;
+        vec($warnings::DeadBits{'all'}, $warnings::LAST_BIT++, 1) = 1;
+    }
     }
 }
 
@@ -52,19 +56,23 @@ for my $name (qw(grep close print)) {
 push @categories, "sort_prototype";
 push @categories, "ref_assignment";
 
-warnings::register_categories($_) for @categories;
+register_categories($_) for @categories;
 
 my @offsets = map {
                     $warnings::Offsets{$_} / 2
                 } @categories;
 
-my $pedantic = 0;
-
-$pedantic |= $_ for map { $warnings::Offsets{$_} } @categories;
-
-use Devel::Peek;
-Dump($pedantic);
-exit;
+# This code creates the 'pedantic' category, and adds all of the new
+# categories as subcategories.
+# In short, this allows 'use warnings "pedantic"' to turn all of them by
+# default, while also allowing this to work:
+#   use warnings "pedantic"; no warnings "void_print"
+{
+    my ($submask, $deadmask);
+    $submask  |= $_ for map { $warnings::Bits{$_}     } @categories;
+    $deadmask |= $_ for map { $warnings::DeadBits{$_} } @categories;
+    register_categories(['pedantic', $submask, $deadmask]);
+}
 
 start(shift, @offsets);
 
@@ -143,7 +151,35 @@ and that prototype isn't C<$$>.
 
 This probably doesn't do what the author intended for it to do.
 
+=item * ref_assignment
+
+Warns when you attempt to assign an arrayref to an array, without using
+parenthesis to disambiguate:
+
+    my @a  = [1,2,3];   # Warns; did you mean (...) instead of [...]?
+    my @a2 = ([1,2,3]); # Doesn't warn
+
+This is a common mistake for people who've recently picked up Perl.
+
 =back
+
+Or in tree form:
+
+    all -+
+         |
+         +- pedantic --+
+                       |
+                       +- void_grep
+                       |
+                       +- void_close
+                       |
+                       +- void_print
+                       |
+                       +- sort_prototype
+                       |
+                       +- ref_assignment
+                       
+                       
 
 All of the warnings can be turned off with
 
