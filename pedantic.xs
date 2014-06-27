@@ -77,11 +77,33 @@ static U32 void_close     = 0;
 static U32 void_print     = 0;
 static U32 sort_prototype = 0;
 static U32 ref_assignment = 0;
+static U32 maybe_const    = 0;
 
 #define warnif4(x,m,a,b,c)  Perl_ck_warner(aTHX_ packWARN(x),m,a,b,c);
 #define warnif(x,m)         warnif4(x, m, NULL, NULL, NULL)
 #define warnif2(x,m,a)      warnif4(x, m, a, NULL, NULL)
 #define warnif3(x,m,a,b)    warnif4(x, m, a, b, NULL)
+
+STATIC GV*
+THX_find_gv(pTHX_ OP* nextstate, SV* sv)
+#define find_gv(n,sv) THX_find_gv(aTHX_ n, sv)  
+{
+                /* PL_curstash will msot likely be pointing to %main::,
+                 * but we want the stash that this OP will be run under.
+                 * This is important, because if they did
+                 *    sort foo 1..10
+                 * then all we'll get is a 'foo', which without this,
+                 * we would end up looking in main::foo
+                 */
+
+    GV *gv;
+    HV *curstash = PL_curstash;
+    if (nextstate)  
+        PL_curstash  = CopSTASH((COP*)nextstate);
+    gv = gv_fetchsv(sv, 0, SVt_PVCV);
+    PL_curstash  = curstash;
+    return gv;
+}
 
 static peep_t prev_rpeepp = NULL;
 STATIC void
@@ -105,6 +127,41 @@ my_rpeep(pTHX_ OP *o)
                 break;
             }
             case OP_NULL:
+                if ( o->op_targ == OP_LIST ) {
+                    OP *p = cUNOPo->op_first;
+                    
+                    if (!p || !p->op_sibling)
+                        break;
+                    
+                    p = p->op_sibling;
+                    
+                    while ( p ) {
+                    
+                        while ( p && p->op_type != OP_CONST )
+                            p = p->op_sibling;
+                        
+                        if (!p)
+                            break;
+                    
+                        if ( p->op_type == OP_CONST && p->op_private & OPpCONST_BARE )
+                            {
+                                SV * sv = cSVOPx_sv(p);
+                                CV *cv;
+                                GV *gv = find_gv(nextstate, sv);
+                                if (!gv)
+                                    break;
+                                cv = GvCV(gv);
+                                if (!cv)
+                                    break;
+                                if (!CvCONST(cv))
+                                    break;
+                                
+                                warnif2(maybe_const, "\"%"SVf"\" used on the left hand side of the fat comma operator is also a constant in the current package", sv);
+                                
+                            }
+                        p = p->op_sibling;
+                    }
+                }
                 if (   o->op_targ != OP_NEXTSTATE
                     || o->op_targ != OP_DBSTATE )
                     break;
@@ -166,7 +223,6 @@ my_rpeep(pTHX_ OP *o)
                 break;
             }
             case OP_SORT: {
-                HV *curstash = PL_curstash;
                 GV *gv;
                 CV *cv;
                 SV *sv;
@@ -186,16 +242,7 @@ my_rpeep(pTHX_ OP *o)
                     break;
                 
                 sv = cSVOPx_sv(constop);
-                /* PL_curstash will msot likely be pointing to %main::,
-                 * but we want the stash that this OP will be run under.
-                 * This is important, because if they did
-                 *    sort foo 1..10
-                 * then all we'll get is a 'foo', which without this,
-                 * we would end up looking in main::foo
-                 */
-                PL_curstash  = CopSTASH((COP*)nextstate);
-                gv = gv_fetchsv(sv, 0, SVt_PVCV);
-                PL_curstash  = curstash;
+                gv = find_gv(nextstate, sv);
                 
                 if (!gv)
                     break;
@@ -253,6 +300,33 @@ my_rpeep(pTHX_ OP *o)
                                 
                 break;
             }
+            case OP_HELEM: {
+                OP * key = cBINOPo->op_last;
+                SV * sv; CV *cv; GV *gv;
+                
+                if ( key->op_type != OP_CONST )
+                    break;
+                if ( !(key->op_private & OPpCONST_BARE) )
+                    break;
+
+                sv = cSVOPx_sv(key);
+                
+                gv = find_gv(nextstate, sv);
+                
+                if (!gv)
+                    break;
+                
+                cv = GvCV(gv);
+                
+                if (!cv)
+                    break;
+
+                if (!CvCONST(cv))
+                    break;
+
+                
+                warnif2(maybe_const, "Hash key \"%"SVf"\" is also a constant in the current package", sv);
+            }
         }
     }
     PL_curcop = &PL_compiling;
@@ -264,13 +338,14 @@ MODULE = warnings::pedantic PACKAGE = warnings::pedantic
 PROTOTYPES: DISABLE
 
 void
-start(SV *classname, U32 vg, U32 vc, U32 vp, U32 sop, U32 rea)
+start(SV *classname, U32 vg, U32 vc, U32 vp, U32 sop, U32 rea, U32 mc)
 CODE:
     void_grep  = vg;
     void_close = vc;
     void_print = vp;
     sort_prototype = sop;
     ref_assignment = rea;
+    maybe_const    = mc;
     if (!prev_rpeepp) {
         prev_rpeepp = WP_PEEP;
         WP_PEEP  = my_rpeep;

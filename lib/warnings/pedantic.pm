@@ -25,22 +25,22 @@ sub mkMask {
 
 sub register_categories {
     for my $package ( @_ ) {
-    my ($submask, $deadmask);
-    if (ref $package) {
-        ($package, $submask, $deadmask) = @$package;
-    }
-    if (! defined $warnings::Bits{$package}) {
-        $warnings::Bits{$package}     = mkMask($warnings::LAST_BIT);
-        $warnings::Bits{$package} |= $submask if $submask;
-        vec($warnings::Bits{'all'}, $warnings::LAST_BIT, 1) = 1;
-        $warnings::Offsets{$package}  = $warnings::LAST_BIT ++;
-    foreach my $k (keys %warnings::Bits) {
-        vec($warnings::Bits{$k}, $warnings::LAST_BIT, 1) = 0;
-    }
-        $warnings::DeadBits{$package} = mkMask($warnings::LAST_BIT);
-        $warnings::DeadBits{$package} |= $deadmask if $deadmask;
-        vec($warnings::DeadBits{'all'}, $warnings::LAST_BIT++, 1) = 1;
-    }
+        my ($submask, $deadmask);
+        if (ref $package) {
+            ($package, $submask, $deadmask) = @$package;
+        }
+        if (! defined $warnings::Bits{$package}) {
+            $warnings::Bits{$package}  = mkMask($warnings::LAST_BIT);
+            $warnings::Bits{$package} |= $submask if $submask;
+            vec($warnings::Bits{'all'}, $warnings::LAST_BIT, 1) = 1;
+            $warnings::Offsets{$package} = $warnings::LAST_BIT ++;
+            foreach my $k (keys %warnings::Bits) {
+                vec($warnings::Bits{$k}, $warnings::LAST_BIT, 1) = 0;
+            }
+            $warnings::DeadBits{$package}  = mkMask($warnings::LAST_BIT);
+            $warnings::DeadBits{$package} |= $deadmask if $deadmask;
+            vec($warnings::DeadBits{'all'}, $warnings::LAST_BIT++, 1) = 1;
+        }
     }
 }
 
@@ -55,6 +55,7 @@ for my $name (qw(grep close print)) {
 
 push @categories, "sort_prototype";
 push @categories, "ref_assignment";
+push @categories, "maybe_const";
 
 register_categories($_) for @categories;
 
@@ -161,6 +162,19 @@ parenthesis to disambiguate:
 
 This is a common mistake for people who've recently picked up Perl.
 
+=item * maybe_const
+
+Identifiers used as either hash keys or on the left hand side of the fat
+comma are always interpreted as barewords, even if they have a constant
+attached to that name:
+
+    use constant CONSTANT => 1;
+    my %x = CONSTANT => 5;      # Used as "CONSTANT"
+    $x{CONSTANT} = 5;           # Ditto
+
+This is intended behaviour on Perl's part, but is an occasional source of
+bugs.
+
 =back
 
 Or in tree form:
@@ -178,6 +192,8 @@ Or in tree form:
                        +- sort_prototype
                        |
                        +- ref_assignment
+                       |
+                       +- maybe_const
                        
                        
 
