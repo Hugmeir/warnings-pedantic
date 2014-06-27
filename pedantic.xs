@@ -99,10 +99,9 @@ my_rpeep(pTHX_ OP *o)
             return;
         }
         switch(o->op_type) {
-            /* XXX TODO this stops an infinite loop with for(;;) {last} */
             case OP_UNSTACK: {
-                PL_curcop = &PL_compiling;
-                prev_rpeepp(aTHX_ o);
+                /* XXX TODO this stops an infinite loop with for(;;) {last} */
+                o->op_opt = 1;
                 break;
             }
             case OP_NULL:
