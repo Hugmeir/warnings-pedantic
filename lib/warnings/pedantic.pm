@@ -1,6 +1,6 @@
 package warnings::pedantic;
 
-use 5.006;
+use 5.010;
 use strict;
 use warnings FATAL => 'all';
 
@@ -11,7 +11,7 @@ warnings::pedantic - Dubious warnings for dubious constructs.
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
@@ -44,7 +44,7 @@ sub register_categories {
     }
 }
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 require XSLoader;
 XSLoader::load(__PACKAGE__);
 
