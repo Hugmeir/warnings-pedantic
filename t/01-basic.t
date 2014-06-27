@@ -109,4 +109,16 @@ like(
 );
 $w = '';
 
+eval <<'EOP';
+for (;;) { last; grep /42/, (1,2); (); last; }
+while () { last; grep /42/, (1,2); (); last; }
+EOP
+
+like(
+    $w,
+    qr/Unusual use of grep in void context.+Unusual use of grep in void context/sm,
+    "while(){} and for(;;) caused infinite loops in the opcode"
+);
+$w = '';
+
 done_testing;

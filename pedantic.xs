@@ -99,11 +99,12 @@ my_rpeep(pTHX_ OP *o)
             return;
         }
         switch(o->op_type) {
-        	case OP_ENTERLOOP:
-	        case OP_ENTERITER:
-	            /* XXX TODO */
-	            o = cLOOPo->op_lastop;
-	            break;
+            /* XXX TODO this stops an infinite loop with for(;;) {last} */
+            case OP_UNSTACK: {
+                PL_curcop = &PL_compiling;
+                prev_rpeepp(aTHX_ o);
+                break;
+            }
             case OP_NULL:
                 if (   o->op_targ != OP_NEXTSTATE
                     || o->op_targ != OP_DBSTATE )
