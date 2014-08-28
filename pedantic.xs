@@ -151,12 +151,17 @@ my_rpeep(pTHX_ OP *o)
                 else if (o->op_private & OPpLVAL_INTRO) {
                     HE *he = hv_fetch_ent(seen, newSViv(PTR2IV(sva)), FALSE, 0);
             	    if (!he) {
-                        hv_store_ent(seen, newSViv(PTR2IV(sva)), newSVsv(sv), 0);
+            	        SV* store = newSVsv(sv);
+            	        /* Jump through hoops in case this is optimized twice */
+            	        SvUPGRADE(store, SVt_PVIV);
+            	        SvIVX(store) = PTR2IV(o);
+                        hv_store_ent(seen, newSViv(PTR2IV(sva)), store, 0);
                     }
-                    else if ( SvIV(HeVAL(he)) != 3 ) {
-                        sv_dump(sv);
-                        sv_dump(HeVAL(he));
-                        croak("How can this happen?");
+                    else if ( SvPOK(HeVAL(he)) ) {
+                        SV *val = HeVAL(he);
+                        if ( SvIVX(val) != PTR2IV(o) ) {
+                            croak("How can this happen?");
+                        }
                     }
                 }
                 else { /* Normal use */
