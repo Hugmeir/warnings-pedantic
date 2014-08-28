@@ -57,6 +57,9 @@ push @categories, "sort_prototype";
 push @categories, "ref_assignment";
 push @categories, "maybe_const";
 
+# 'Used only once' warning for lexical variables
+push @categories, "once_lexical";
+
 register_categories($_) for @categories;
 
 my @offsets = map {
