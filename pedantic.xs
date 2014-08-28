@@ -386,7 +386,7 @@ my_rpeep(pTHX_ OP *o)
     SV **svp = AvARRAY(seen);
     while (len) {
         len--;
-        SV *hv = svp[len];
+        HV *hv = MUTABLE_HV(svp[len]);
         HE *entry;
         (void)hv_iterinit(hv);
         while ((entry = hv_iternext(hv))) {
