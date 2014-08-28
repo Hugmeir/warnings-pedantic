@@ -178,6 +178,18 @@ attached to that name:
 This is intended behaviour on Perl's part, but is an occasional source of
 bugs.
 
+=item * once_lexical
+
+With warnings on, if you use a global variable once, you get a warning:
+
+    $x = 1;    # Name "main::x" used only once: possible typo at -e line 1.
+
+This category extends the warning to also apply to lexical variables:
+
+    my $x = 1; # Lexical variable $x used only once: possible typo.
+
+This is by far the most experimental category.
+
 =back
 
 Or in tree form:

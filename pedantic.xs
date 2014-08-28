@@ -65,7 +65,8 @@ Perl_ck_warner(pTHX_ U32 err, const char* pat, ...)
 #define MY_CXT_KEY "warnings::pedantic::_guts" XS_VERSION
  
 typedef struct {
- HV* fake_seen;
+ HV* seen;
+ HV* seen_where;
 } my_cxt_t;
  
 START_MY_CXT
@@ -141,9 +142,13 @@ my_rpeep(pTHX_ OP *o)
             }
             case OP_PADSV: {
                 dMY_CXT;
-                HV *seen = MY_CXT.fake_seen;
+                HV *seen       = MY_CXT.seen;
+                HV *seen_where = MY_CXT.seen_where;
                 SV * sv = AvARRAY(PL_comppad_name)[o->op_targ];
             	SV * sva = PAD_BASE_SV(CvPADLIST(PL_compcv), o->op_targ);
+            	
+                if (!warn_for(once_lexical))
+                    break;
             	
                 if (SvFAKE(sv)) { /* Closed over var! */
                     SV** outpad;
@@ -159,11 +164,16 @@ my_rpeep(pTHX_ OP *o)
                 else if (o->op_private & OPpLVAL_INTRO) {
                     HE *he = hv_fetch_ent(seen, newSViv(PTR2IV(sva)), FALSE, 0);
             	    if (!he) {
+            	        SV* keysv = newSViv(PTR2IV(sva));
             	        SV* store = newSVsv(sv);
+            	        SV* where = newSVpvf("%s line %d", CopFILE(PL_curcop), CopLINE(PL_curcop));
+
             	        /* Jump through hoops in case this is optimized twice */
             	        SvUPGRADE(store, SVt_PVIV);
             	        SvIVX(store) = PTR2IV(o);
-                        hv_store_ent(seen, newSViv(PTR2IV(sva)), store, 0);
+            	        
+                        hv_store_ent(seen_where, keysv, where, 0);
+                        hv_store_ent(seen, keysv, store, 0);
                     }
                     else if ( SvPOK(HeVAL(he)) ) {
                         SV *val = HeVAL(he);
@@ -397,7 +407,8 @@ PROTOTYPES: DISABLE
 BOOT:
 {
     MY_CXT_INIT;
-    MY_CXT.fake_seen = newHV();
+    MY_CXT.seen = newHV();
+    MY_CXT.seen_where = newHV();
 }
 
 void
@@ -405,7 +416,8 @@ INIT()
 CODE:
 {
     dMY_CXT;
-    HV *hv = MY_CXT.fake_seen;
+    HV *hv    = MY_CXT.seen;
+    HV *where = MY_CXT.seen_where;
 
     /* Iterate through the pad variables we've seen and try to find out if
      * we have something used only once
@@ -415,12 +427,16 @@ CODE:
     while ((entry = hv_iternext(hv))) {
         SV * tmpstr = hv_iterval(hv,entry);
         if ( SvPOK(tmpstr) ) {
-            warn("Lexical variable %"SVf" used only once: possible typo", tmpstr);
+            SV* key = hv_iterkeysv(entry);
+            HE* he = hv_fetch_ent(where, key, FALSE, 0);
+            warn("Lexical variable %"SVf" used only once: possible typo at %"SVf, tmpstr, HeVAL(he));
         }
     }
     
     SvREFCNT_dec(hv);
-    MY_CXT.fake_seen = newHV();
+    SvREFCNT_dec(where);
+    MY_CXT.seen       = newHV();
+    MY_CXT.seen_where = newHV();
 }
 
 void
