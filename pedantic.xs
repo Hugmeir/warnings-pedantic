@@ -131,6 +131,14 @@ my_rpeep(pTHX_ OP *o)
         }
         
         switch(o->op_type) {
+            case OP_ENTERITER: {
+                if ( !(o->op_private & OPpLVAL_INTRO) ) 
+                    break;
+                if ( o->op_private & OPpITER_DEF )
+                    break;
+                
+                /* fallthrough */
+            }
             case OP_PADSV: {
                 dMY_CXT;
                 HV *seen = MY_CXT.fake_seen;
