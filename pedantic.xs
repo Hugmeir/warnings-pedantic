@@ -86,6 +86,7 @@ static U32 void_print     = 0;
 static U32 sort_prototype = 0;
 static U32 ref_assignment = 0;
 static U32 maybe_const    = 0;
+static U32 once_lexical   = 0;
 
 #define warnif4(x,m,a,b,c)  Perl_ck_warner(aTHX_ packWARN(x),m,a,b,c);
 #define warnif(x,m)         warnif4(x, m, NULL, NULL, NULL)
@@ -118,15 +119,8 @@ STATIC void
 my_rpeep(pTHX_ OP *o)
 #define my_rpeep(o) my_rpeep(aTHX_ o)
 {
-    dMY_CXT;
     OP *orig_o = o;
     OP *nextstate = NULL;
-
-    AV *seen      = newAV();
-    HV *cur_seen  = newHV();
-    HV *fake_seen = MY_CXT.fake_seen;
-    
-    IV len = 0;
 
     for(; o; o = o->op_next) {
         char *what = NULL;
@@ -138,35 +132,36 @@ my_rpeep(pTHX_ OP *o)
         
         switch(o->op_type) {
             case OP_PADSV: {
+                dMY_CXT;
+                HV *seen = MY_CXT.fake_seen;
                 SV * sv = AvARRAY(PL_comppad_name)[o->op_targ];
-            	SV ** const padentry = &(PAD_SVl(o->op_targ));
+            	SV * sva = PAD_BASE_SV(CvPADLIST(PL_compcv), o->op_targ);
+            	
                 if (SvFAKE(sv)) { /* Closed over var! */
-                    hv_store_ent(fake_seen, sv, newSViv(3), 0);
+                    SV** outpad;
+                	CV *out = CvOUTSIDE(PL_compcv);
+                    
+                    if (!out)
+                        croak("Can't happen?");
+                    
+                    sva = PAD_BASE_SV(CvPADLIST(out), PARENT_PAD_INDEX(sv)); 
+                    
+                    hv_store_ent(seen, newSViv(PTR2IV(sva)), newSViv(3), 0);
                 }
                 else if (o->op_private & OPpLVAL_INTRO) {
-                    SV *seen_sv = hv_delete_ent(fake_seen, sv, 0, 0);
-                    if (!seen_sv) {
-                        hv_store_ent(cur_seen, sv, newSViv(1), 0);
+                    HE *he = hv_fetch_ent(seen, newSViv(PTR2IV(sva)), FALSE, 0);
+            	    if (!he) {
+                        hv_store_ent(seen, newSViv(PTR2IV(sva)), newSVsv(sv), 0);
                     }
-                    else {
-                        hv_store_ent(cur_seen, sv, newSViv(2), 0);
+                    else if ( SvIV(HeVAL(he)) != 3 ) {
+                        sv_dump(sv);
+                        sv_dump(HeVAL(he));
+                        croak("How can this happen?");
                     }
                 }
                 else { /* Normal use */
-                    hv_store_ent(cur_seen, sv, newSViv(2), 0);
+                    hv_store_ent(seen, newSViv(PTR2IV(sva)), newSViv(2), 0);
                 }
-                break;
-            }
-            case OP_LEAVESUB:
-            case OP_LEAVESUBLV:
-            case OP_LEAVE:
-            case OP_LEAVELOOP:
-            case OP_LEAVEGIVEN:
-            case OP_LEAVEWHEN:
-            case OP_LEAVETRY: {
-                av_push(seen, SvREFCNT_inc(cur_seen));
-                cur_seen = newHV();
-                len++;
                 break;
             }
             case OP_UNSTACK: {
@@ -378,26 +373,6 @@ my_rpeep(pTHX_ OP *o)
         }
     }
     
-    /* Iterate through the pad variables we've seen and try to find out if
-     * we have something used only once
-     */
-    
-    /* Huh.. why doesn't av_len(seen) work here...? */
-    SV **svp = AvARRAY(seen);
-    while (len) {
-        len--;
-        HV *hv = MUTABLE_HV(svp[len]);
-        HE *entry;
-        (void)hv_iterinit(hv);
-        while ((entry = hv_iternext(hv))) {
-            SV * tmpstr = hv_iterval(hv,entry);
-            if ( SvIV(tmpstr) != 2 ) {
-                SV *keysv = hv_iterkeysv(entry);
-                warn("Lexical variable %"SVf" used only once: possible typo", keysv);
-            }
-        }
-    }
-    
     PL_curcop = &PL_compiling;
     prev_rpeepp(aTHX_ orig_o);
 }
@@ -413,7 +388,30 @@ BOOT:
 }
 
 void
-start(SV *classname, U32 vg, U32 vc, U32 vp, U32 sop, U32 rea, U32 mc)
+INIT()
+CODE:
+{
+    dMY_CXT;
+    HV *hv = MY_CXT.fake_seen;
+
+    /* Iterate through the pad variables we've seen and try to find out if
+     * we have something used only once
+     */
+    HE *entry;
+    (void)hv_iterinit(hv);
+    while ((entry = hv_iternext(hv))) {
+        SV * tmpstr = hv_iterval(hv,entry);
+        if ( SvPOK(tmpstr) ) {
+            warn("Lexical variable %"SVf" used only once: possible typo", tmpstr);
+        }
+    }
+    
+    SvREFCNT_dec(hv);
+    MY_CXT.fake_seen = newHV();
+}
+
+void
+start(SV *classname, U32 vg, U32 vc, U32 vp, U32 sop, U32 rea, U32 mc, U32 ol)
 CODE:
     void_grep  = vg;
     void_close = vc;
@@ -421,6 +419,7 @@ CODE:
     sort_prototype = sop;
     ref_assignment = rea;
     maybe_const    = mc;
+    once_lexical   = ol;
     if (!prev_rpeepp) {
         prev_rpeepp = WP_PEEP;
         WP_PEEP  = my_rpeep;
